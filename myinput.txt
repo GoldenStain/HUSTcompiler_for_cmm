@@ -4,5 +4,6 @@ void main(void)
     a = 1;
     int b = input();
     output(b);
+    int c = 5;
     return 0;
 }
