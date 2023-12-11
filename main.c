@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "MyLex.h"
+//#include "MyBison.h"
 
 int main(int argc, const char *argv[])
 {
@@ -26,15 +27,11 @@ int main(int argc, const char *argv[])
         fprintf(stderr, RED);
         fprintf(stderr, "lexer failed");
         fprintf(stderr, NONE);
-        exit(0);
+        exit(1);
     }
-    #ifdef DEBUG
-    printf("%d\n", vector->size);
-    for (int i = 0; i < (vector)->size; i++)
-        printf("number %d is %s \n", i, (vector)->context[i].s);
-    puts("");
-    #endif
     fclose(fp);
+    Lex_check();
     free_vec(vector);
+    Trie_destroy(trie);
     return 0;
 }

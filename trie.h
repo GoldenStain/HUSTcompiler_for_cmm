@@ -17,13 +17,14 @@ enum TokenType
     IF,
     WHILE,
     RETURN,
-    SINGLE,
+    SINGLE,//单长度运算符(包括逗号)
+    DOUBLE,//双长度运算符
 };
 
 typedef struct Trie
 {
     char c;
-    TokenType token_type = USELESS;
+    int token_type = 0;
     struct Trie *next[26];
 } Trie;
 
@@ -35,7 +36,7 @@ Trie *create_new_node()
     return tmp;
 }
 
-void Trie_insert(Trie **root, char *str, TokenType t_type)
+void Trie_insert(Trie **root, char *str, int t_type)
 {
     int len = strlen(str);
     Trie *current = *root;
@@ -56,7 +57,7 @@ void Trie_insert(Trie **root, char *str, TokenType t_type)
     }
 }
 
-TokenType Trie_search(Trie *root, char *str)
+int Trie_search(Trie *root, char *str)
 {
     for (int i = 0; i < strlen(str); i++)
     {

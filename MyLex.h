@@ -85,6 +85,8 @@ int check(char c)
 {
     if (c == '+' || c == '-' || c == '*' || c == '/' || c == '=')
         return 1;
+    if (c == '>' || c == '<')
+        return 1;
     if (c == '(' || c == ')')
         return 1;
     if (c == '[' || c == ']')
@@ -93,23 +95,25 @@ int check(char c)
         return 1;
     if (c == ';')
         return 1;
+    if (c == ',')
+        return 1;
     return 0;
 }
 
 void vec_push(char *str, TokenType t_type)
 {
-    if(t_type == START)
-        return ;
-    c_context tmp;
+    if (t_type == START)
+        return;
+    Data tmp;
 #ifdef DEBUG
     printf("vec_push activated\nstr is %s\n", str);
 #endif
-    tmp.token_type = t_type;
-    tmp.s = (char *)malloc(sizeof(str));
-    strcpy(tmp.s, str);
+    tmp.context.token_type = t_type;
+    tmp.context.s = (char *)malloc(sizeof(str));
+    strcpy(tmp.context.s, str);
     if (t_type == IDENT)
     {
-        TokenType search_result = Trie_search(trie, str);
+        TokenType search_result = (TokenType)Trie_search(trie, str);
         if (search_result != USELESS)
         {
 #ifdef DEBUG
@@ -122,20 +126,35 @@ void vec_push(char *str, TokenType t_type)
     push_back(&vector, tmp);
 }
 
+int check_2(char *ptr)
+{
+    if (*ptr == '!' && *(ptr + 1) == '=')
+        return 1;
+    else if (*ptr == '<' && *(ptr + 1) == '=')
+        return 2;
+    else if (*ptr == '>' && *(ptr + 1) == '=')
+        return 3;
+    else if (*ptr == '=' && *(ptr + 1) == '=')
+        return 4;
+    return 0;
+}
+
 // 处理单个token
 int get_token(int st, int ed, char *str)
 {
-#ifdef DEBUG
-/*char s[10];
-strcpy(s, "ccc");
-puts(s);
-vec_push(s, USELESS);*/
-#endif
     // 注意特殊字符：
     // 括号，分号，运算符
     TokenType now_state = START;
     for (int i = st; i <= ed; i++)
     {
+        // 如果正处于注释状态下
+        if (IsComment)
+        {
+            while (i + 1 <= ed && !(str[i] == '*' && str[i + 1] == '/'))
+                i++;
+            if (i < ed && str[i] == '*' && str[i + 1] == '/')
+                IsComment = 0;
+        }
 #ifdef DEBUG
         // printf("the char is %c and the state is %d\n", str[i], (int)now_state);
 #endif
@@ -146,23 +165,58 @@ vec_push(s, USELESS);*/
 #endif
             return 0;
         }
-        if (str[i] == ' ' || str[i] == '\n')
+        if (str[i] == ' ' || str[i] == '\n' || str[i] == '\t')
         {
-#ifdef DEBUG
-            printf(YELLOW "now is at position %d\n and now the range is %d to %d", i, st, ed);
-#endif
-            char tmp_str[i - st + 1];
-            strncpy(tmp_str, str + st, i - st);
-            tmp_str[i - st] = '\0';
-#ifdef DEBUG
-            printf("and tmp_str is %s\n" NONE, tmp_str);
-#endif
-            vec_push(tmp_str, now_state);
-            while (str[i] == ' ' || str[i] == '\n')
+            if (i - st > 0)
+            {
+                char tmp_str[i - st + 1];
+                strncpy(tmp_str, str + st, i - st);
+                tmp_str[i - st] = '\0';
+                vec_push(tmp_str, now_state);
+            }
+            while (str[i] == ' ' || str[i] == '\n' || str[i] == '\t')
                 i++;
             return get_token(i, ed, str);
         }
+        // 长度为1的运算符
         if (check(str[i]))
+        {
+            // 如果进入了一个注释
+            if (str[i] == '/' && str[i + 1] == '*')
+            {
+                if (IsComment)
+                {
+                    fprintf(stderr, RED "mutiple block comment" NONE);
+                    return 0;
+                }
+                IsComment = 1;
+                if (i > st)
+                {
+                    char tmp_str[i - st + 1];
+                    strncpy(tmp_str, str + st, i - st);
+                    tmp_str[i - st] = '\0';
+                    vec_push(tmp_str, now_state);
+                }
+                return get_token(i + 2, ed, str);
+            }
+#ifdef DEBUG
+            printf(YELLOW "now is at position %d\n" NONE, i);
+#endif
+            if (i > st)
+            {
+                char tmp_str[i - st + 1];
+                strncpy(tmp_str, str + st, i - st);
+                tmp_str[i - st] = '\0';
+                vec_push(tmp_str, now_state);
+            }
+            char tmp_str_2[2];
+            tmp_str_2[0] = str[i];
+            tmp_str_2[1] = '\0';
+            vec_push(tmp_str_2, SINGLE);
+            return get_token(i + 1, ed, str);
+        }
+        // 长度为2的运算符
+        if (check_2(str + i))
         {
 #ifdef DEBUG
             printf(YELLOW "now is at position %d\n", i);
@@ -174,11 +228,12 @@ vec_push(s, USELESS);*/
             printf("and tmp_str is %s\n" NONE, tmp_str);
 #endif
             vec_push(tmp_str, now_state);
-            char tmp_str_2[2];
+            char tmp_str_2[3];
             tmp_str_2[0] = str[i];
+            tmp_str_2[1] = str[i + 1];
             tmp_str_2[1] = '\0';
-            vec_push(tmp_str_2, SINGLE);
-            return get_token(i + 1, ed, str);
+            vec_push(tmp_str_2, DOUBLE);
+            return get_token(i + 2, ed, str);
         }
         now_state = Transformer[now_state][str[i]];
 #ifdef DEBUG
@@ -223,18 +278,6 @@ int DealWith(char *str)
 {
     int len = strlen(str);
     // 如果当前正在注释当中，则无需处理
-    if (IsComment)
-    {
-        int i = str[len - 2];
-        if (str[i] == '*' && str[i + 1] == '/')
-            IsComment = 0;
-        return 1;
-    }
-    if (str[0] == '/' && str[1] == '*') // 处理注释
-    {
-        IsComment = 1;
-        return 1;
-    }
     if (!get_token(0, len - 1, str))
     {
 #ifdef DEBUG
@@ -272,6 +315,17 @@ int DealWith(char *str)
     return 1;
 }
 
+// 检测lex是否成功提取token
+void Lex_check()
+{
+    printf(YELLOW);
+    printf("the total size is%d\n", vector->size);
+    for (int i = 0; i < (vector)->size; i++)
+        printf("number %d is %s \n", i, (vector)->data[i].context.s);
+    puts("");
+    printf(NONE);
+}
+
 int MyLexer(FILE *fp)
 {
     Lex_init();
@@ -280,6 +334,12 @@ int MyLexer(FILE *fp)
     {
         if (!DealWith(str))
             return 0;
+    }
+    // 检测注释格式是否正确
+    if (IsComment)
+    {
+        fprintf(stderr, RED "a incomplete blockcomment" NONE);
+        return 0;
     }
     return 1;
 }

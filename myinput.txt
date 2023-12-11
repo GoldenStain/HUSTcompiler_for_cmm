@@ -1,9 +1,26 @@
+/*the maximum of three numbers*/
+int max(int x, int y, int z)
+{
+	int biggest;
+	biggest = x;
+	if(y>biggest)  /*comment example*/
+		biggest = y;
+	if(z>biggest) biggest = z;
+
+	return biggest;
+}
+
 void main(void)
 {
-    int a;
-    a = 1;
-    int b = input();
-    output(b);
-    int c = 5;
-    return 0;
+	int x;
+	int y;
+	int z;
+	int biggest;
+
+	x = intput();
+	y = input();
+	z = intput();
+
+	biggest = max(x, y, z);
+	output(biggest);
 }
