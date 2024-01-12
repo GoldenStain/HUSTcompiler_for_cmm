@@ -3,7 +3,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "MyLex.h"
-//#include "MyBison.h"
+#include "MyBison.h"
+#include "ast.h"
+
+extern Program* Myprogram;
 
 int main(int argc, const char *argv[])
 {
@@ -29,8 +32,16 @@ int main(int argc, const char *argv[])
         fprintf(stderr, NONE);
         exit(1);
     }
+    FILE *fp_2 = fopen("myoutput.txt", "w");
     fclose(fp);
-    Lex_check();
+    Lex_check(fp_2);
+    printf("--------------------------------\n");
+    Myprogram = dfs_program(0);
+    printf("--------------------------------\n");
+    fclose(fp_2);
+    freopen("myoutput.txt", "a+", stdout);
+    if(Myprogram != NULL)
+        Myprogram->print(0);
     free_vec(vector);
     Trie_destroy(trie);
     return 0;

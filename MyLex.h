@@ -5,15 +5,14 @@
 #include <stdlib.h>
 #include "trie.h"
 #include "cvector.h"
-#define DEBUG
 #define RED "\033[0;32;31m"
 #define PURPLE "\033[0;35m"
 #define YELLOW "\033[1;33m"
 #define NONE "\033[m"
 
-const int N = 1005, M = 105;
+const int N = 55, M = 512;
 
-int IsComment = 0;
+int IsComment = 0, line_cnt = 0;
 Trie *trie = NULL;
 CStyleVector *vector = NULL;
 
@@ -68,7 +67,7 @@ void build_edge()
 
 void Lex_init()
 {
-    Trie_init(&trie);
+    Trie_init(&trie, 0); // 0表示是token所使用的
 #ifdef DEBUG
     char s[10];
     strcpy(s, "int");
@@ -81,12 +80,12 @@ void Lex_init()
     // 连边
 }
 
-int check(char c)
+int check(char c, char d)
 {
-    if (c == '+' || c == '-' || c == '*' || c == '/' || c == '=')
-        return 1;
-    if (c == '>' || c == '<')
-        return 1;
+    if (c == '+' || c == '-' || c == '*' || c == '/' || (c == '=' && d != '='))
+        return 2;
+    if ((c == '>' && d != '=') || (c == '<' && d != '='))
+        return 2;
     if (c == '(' || c == ')')
         return 1;
     if (c == '[' || c == ']')
@@ -102,27 +101,36 @@ int check(char c)
 
 void vec_push(char *str, TokenType t_type)
 {
+    // 特判
     if (t_type == START)
         return;
     Data tmp;
 #ifdef DEBUG
     printf("vec_push activated\nstr is %s\n", str);
 #endif
-    tmp.context.token_type = t_type;
-    tmp.context.s = (char *)malloc(sizeof(str));
-    strcpy(tmp.context.s, str);
+    tmp.data_type = CONTEXT;
+    tmp.this_union.context.line_num = line_cnt;
+    tmp.this_union.context.token_type = t_type;
+    tmp.this_union.context.s = (char *)malloc(sizeof(str));
+    strcpy(tmp.this_union.context.s, str);
+    int len = strlen(str);
+    tmp.this_union.context.s[len] = '\0';
     if (t_type == IDENT)
     {
         TokenType search_result = (TokenType)Trie_search(trie, str);
         if (search_result != USELESS)
         {
 #ifdef DEBUG
-            printf(RED "judge success\n" NONE);
+            printf(RED "the type is %d\n" NONE, (int)search_result);
 #endif
+            tmp.this_union.context.token_type = search_result;
             push_back(&vector, tmp);
             return;
         }
     }
+    if (t_type == OCTAL && len == 1)
+        tmp.this_union.context.token_type = DECIMAL;
+    // 特判，只有一个零且长度为一就是DECIMAL，而且这个规范当中只有十进制
     push_back(&vector, tmp);
 }
 
@@ -153,7 +161,10 @@ int get_token(int st, int ed, char *str)
             while (i + 1 <= ed && !(str[i] == '*' && str[i + 1] == '/'))
                 i++;
             if (i < ed && str[i] == '*' && str[i + 1] == '/')
+            {
                 IsComment = 0;
+                return get_token(i + 2, ed, str);
+            }
         }
 #ifdef DEBUG
         // printf("the char is %c and the state is %d\n", str[i], (int)now_state);
@@ -179,7 +190,8 @@ int get_token(int st, int ed, char *str)
             return get_token(i, ed, str);
         }
         // 长度为1的运算符
-        if (check(str[i]))
+        int check1_res = check(str[i], str[i + 1]), check2_res = check_2(str + i);
+        if (check1_res)
         {
             // 如果进入了一个注释
             if (str[i] == '/' && str[i + 1] == '*')
@@ -212,11 +224,14 @@ int get_token(int st, int ed, char *str)
             char tmp_str_2[2];
             tmp_str_2[0] = str[i];
             tmp_str_2[1] = '\0';
-            vec_push(tmp_str_2, SINGLE);
+            if (check1_res == 1)
+                vec_push(tmp_str_2, SINGLE); // 分隔符
+            else
+                vec_push(tmp_str_2, OPT); // 单字符运算符
             return get_token(i + 1, ed, str);
         }
         // 长度为2的运算符
-        if (check_2(str + i))
+        if (check2_res)
         {
 #ifdef DEBUG
             printf(YELLOW "now is at position %d\n", i);
@@ -231,7 +246,7 @@ int get_token(int st, int ed, char *str)
             char tmp_str_2[3];
             tmp_str_2[0] = str[i];
             tmp_str_2[1] = str[i + 1];
-            tmp_str_2[1] = '\0';
+            tmp_str_2[2] = '\0';
             vec_push(tmp_str_2, DOUBLE);
             return get_token(i + 2, ed, str);
         }
@@ -316,14 +331,13 @@ int DealWith(char *str)
 }
 
 // 检测lex是否成功提取token
-void Lex_check()
+void Lex_check(FILE *fp)
 {
-    printf(YELLOW);
-    printf("the total size is%d\n", vector->size);
-    for (int i = 0; i < (vector)->size; i++)
-        printf("number %d is %s \n", i, (vector)->data[i].context.s);
-    puts("");
-    printf(NONE);
+    fprintf(fp, "the total size is %d\n", vector->size);
+    // printf("the total size is %d\n", vector->size);
+    for (int i = 0; i < vector->size; i++)
+        fprintf(fp, "number %d is %s ,and its type is %s, and it's on line %d\n", i, vector->data[i].this_union.context.s, token_types[(int)vector->data[i].this_union.context.token_type], vector->data[i].this_union.context.line_num);
+    // printf("number %d is %s ,and its type is %d\n", i, vector->data[i].this_union.context.s, vector->data[i].this_union.context.token_type);
 }
 
 int MyLexer(FILE *fp)
@@ -332,6 +346,7 @@ int MyLexer(FILE *fp)
     char str[N];
     while (fgets(str, N, fp))
     {
+        line_cnt++;
         if (!DealWith(str))
             return 0;
     }
@@ -340,6 +355,6 @@ int MyLexer(FILE *fp)
     {
         fprintf(stderr, RED "a incomplete blockcomment" NONE);
         return 0;
-    }
+    } // 必须在结束时检测，有可能注释会占据多行，如果在上面的循环里检测的话就会误判
     return 1;
 }
