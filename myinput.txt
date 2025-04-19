@@ -1,8 +1,0 @@
-
-void main(void)
-{
-    n = input();
-    int result;
-    result = fibo(n);
-    output(result);
-}
